@@ -158,38 +158,39 @@ fn spawn_t(mut commands: Commands, initial_grid_position: Res<InitialGridPositio
     ));
 }
 
+fn render_block(commands: &mut Commands, block_size: &BlockSize, position: Position, fill: &Fill) {
+    let shape = shapes::Rectangle {
+        extents: Vec2::new(block_size.0, block_size.0),
+        origin: RectangleOrigin::Center,
+        ..default()
+    };
+
+    let outline = ShapeBundle {
+        path: GeometryBuilder::build_as(&shape),
+        transform: Transform::from_xyz(position.x, position.y, 0f32),
+        ..default()
+    };
+
+    commands.spawn((outline, Fill::color(fill.color), Stroke::new(BLACK, 2.0)));
+}
+
 fn render_active_piece(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
     block_size: Res<BlockSize>,
     query_pieces: Query<(&StandardPieceRotations, &GridPosition, &Fill), With<ActivePiece>>,
-    window: Single<&Window>,
-    grid: Single<(&Grid, &Position)>,
+    grid_canvas_position: Single<&Position, With<Grid>>,
 ) {
-    let (grid, grid_canvas_position) = *grid;
-    let block_size = block_size.0;
-    // FIXME: this should probably take into account the *current* window size
-    let grid_width = block_size * grid.cols as f32;
-    //let grid_height = block_size.0 * grid.rows as f32;
-
     let initial_x = grid_canvas_position.x;
     let initial_y = grid_canvas_position.y;
 
     for (rotations, piece_grid_position, color) in &query_pieces {
         for block_offset in rotations.cur_offsets().offset_positions.as_ref() {
-            let block_shape = meshes.add(Rectangle::new(block_size, block_size));
-            // FIXME: maybe I need to add block_size to x, it depends in which direction the Rectangle is drawn towards in the x-axis.
-            let x =
-                initial_x + ((piece_grid_position.col as i32 + block_offset.0) as f32 * block_size);
+            let x = initial_x
+                + ((piece_grid_position.col as i32 + block_offset.0) as f32 * block_size.0);
             let y = initial_y
-                - ((piece_grid_position.row as i32 + block_offset.1) as f32 * block_size)
-                - block_size; // minus block_size because it draws the rectangle upwards
-            commands.spawn((
-                Mesh2d(block_shape),
-                MeshMaterial2d(materials.add(color.color)),
-                Transform::from_xyz(x, y, 0.0),
-            ));
+                - ((piece_grid_position.row as i32 + block_offset.1) as f32 * block_size.0)
+                - block_size.0; // minus block_size because it draws the rectangle upwards
+            render_block(&mut commands, &block_size, Position { x, y }, color);
         }
     }
 }
