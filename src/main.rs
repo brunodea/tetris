@@ -299,8 +299,18 @@ struct GravityTimer(Timer);
 #[derive(Resource)]
 struct GravitySpeed(f32);
 
+#[derive(PartialEq)]
+enum State {
+    Paused,
+    Running,
+}
+
+#[derive(Resource)]
+struct GameState(State);
+
 fn apply_gravity(
     mut commands: Commands,
+    game_state: Res<GameState>,
     time: Res<Time>,
     mut timer: ResMut<GravityTimer>,
     mut single_piece: Single<
@@ -311,7 +321,7 @@ fn apply_gravity(
     block_size: Res<BlockSize>,
     grid: Single<&Grid>,
 ) {
-    if timer.0.tick(time.delta()).just_finished() {
+    if game_state.0 == State::Running && timer.0.tick(time.delta()).just_finished() {
         single_piece.2.row += 1;
         for mut transform in &mut query_block {
             transform.translation.y -= block_size.0;
@@ -322,7 +332,7 @@ fn apply_gravity(
             if lowest_row_offset.is_none() {
                 lowest_row_offset = Some(block_row_offset);
             } else if let Some(lowest) = lowest_row_offset {
-                if block_row_offset < lowest {
+                if block_row_offset > lowest {
                     lowest_row_offset = Some(block_row_offset);
                 }
             }
@@ -330,8 +340,6 @@ fn apply_gravity(
         if let Some(lowest_row_offset) = lowest_row_offset {
             // check if the bottom block is touching the bottom of the board
             let piece_row = single_piece.2.row + lowest_row_offset as u32;
-            dbg!(&piece_row);
-            dbg!(&grid.rows);
             if piece_row >= grid.rows {
                 warn!("Removed active piece!");
                 commands.entity(single_piece.0).remove::<ActivePiece>();
@@ -353,9 +361,21 @@ fn increase_gravity(
     }
 }
 
-// TODO: add a "GameState" resource or something so we can have "Paused" and we pause gravity and everything
+fn toggle_game_state(mut game_state: ResMut<GameState>, keyboard: Res<ButtonInput<KeyCode>>) {
+    if keyboard.just_pressed(KeyCode::Enter) {
+        if game_state.0 == State::Running {
+            *game_state = GameState(State::Paused);
+            info!("Game is paused!");
+        } else if game_state.0 == State::Paused {
+            *game_state = GameState(State::Running);
+            info!("Game is running!");
+        }
+    }
+}
+
 fn main() {
     App::new()
+        .insert_resource(GameState(State::Running))
         .insert_resource(BlockSize(30f32))
         .insert_resource(DebugLinesEnabled(false))
         .insert_resource(InitialGridPosition(5, 0))
@@ -370,7 +390,8 @@ fn main() {
                 (initial_spawn_t, render_active_piece).chain(),
             ),
         )
-        .add_systems(Update, (increase_gravity, rotate_piece))
+        .add_systems(Update, (increase_gravity, rotate_piece, apply_gravity))
         .add_systems(Update, (toggle_debug_lines_enabled, grid_debug_lines))
+        .add_systems(Update, toggle_game_state)
         .run();
 }
