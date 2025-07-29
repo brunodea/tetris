@@ -165,23 +165,25 @@ fn render_active_piece(
     block_size: Res<BlockSize>,
     query_pieces: Query<(&StandardPieceRotations, &GridPosition, &Fill), With<ActivePiece>>,
     window: Single<&Window>,
-    grid: Single<&Grid>,
+    grid: Single<(&Grid, &Position)>,
 ) {
+    let (grid, grid_canvas_position) = *grid;
     let block_size = block_size.0;
     // FIXME: this should probably take into account the *current* window size
     let grid_width = block_size * grid.cols as f32;
     //let grid_height = block_size.0 * grid.rows as f32;
 
-    let initial_x = (window.width() / 2f32) - grid_width;
-    let initial_y = 0f32; // a little bit of a margin on top
+    let initial_x = grid_canvas_position.x;
+    let initial_y = grid_canvas_position.y;
 
-    for (rotations, grid_position, color) in &query_pieces {
+    for (rotations, piece_grid_position, color) in &query_pieces {
         for block_offset in rotations.cur_offsets().offset_positions.as_ref() {
             let block_shape = meshes.add(Rectangle::new(block_size, block_size));
             // FIXME: maybe I need to add block_size to x, it depends in which direction the Rectangle is drawn towards in the x-axis.
-            let x = initial_x + ((grid_position.col as i32 + block_offset.0) as f32 * block_size);
+            let x =
+                initial_x + ((piece_grid_position.col as i32 + block_offset.0) as f32 * block_size);
             let y = initial_y
-                - ((grid_position.row as i32 + block_offset.1) as f32 * block_size)
+                - ((piece_grid_position.row as i32 + block_offset.1) as f32 * block_size)
                 - block_size; // minus block_size because it draws the rectangle upwards
             commands.spawn((
                 Mesh2d(block_shape),
