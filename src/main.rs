@@ -270,25 +270,26 @@ fn render_active_piece(
 }
 
 fn rotate_piece(
-    mut single_piece: Single<(&mut StandardPieceRotations, &GridPosition), With<ActivePiece>>,
+    mut query_piece: Query<(&mut StandardPieceRotations, &GridPosition), With<ActivePiece>>,
     mut query_block: Query<(&mut Transform, &BlockIdx), With<ActivePiece>>,
     grid_canvas_position: Single<&Position, With<Grid>>,
     block_size: Res<BlockSize>,
     keyboard: Res<ButtonInput<KeyCode>>,
 ) {
     if keyboard.just_pressed(KeyCode::Space) {
-        single_piece.0.rotate();
-        let cur_offsets = single_piece.0.cur_offsets();
-        let grid_position = single_piece.1;
+        for (mut piece_rotation, grid_position) in &mut query_piece {
+            piece_rotation.rotate();
+            let cur_offsets = piece_rotation.cur_offsets();
 
-        for (mut transform, idx) in &mut query_block {
-            let block_offset = cur_offsets.offset_positions[idx.0];
-            *transform = block_transform(
-                &block_offset,
-                &grid_canvas_position,
-                &grid_position,
-                &block_size,
-            );
+            for (mut transform, idx) in &mut query_block {
+                let block_offset = cur_offsets.offset_positions[idx.0];
+                *transform = block_transform(
+                    &block_offset,
+                    &grid_canvas_position,
+                    &grid_position,
+                    &block_size,
+                );
+            }
         }
     }
 }
@@ -313,36 +314,35 @@ fn apply_gravity(
     game_state: Res<GameState>,
     time: Res<Time>,
     mut timer: ResMut<GravityTimer>,
-    mut single_piece: Single<
-        (Entity, &StandardPieceRotations, &mut GridPosition),
-        With<ActivePiece>,
-    >,
+    mut query_piece: Query<(Entity, &StandardPieceRotations, &mut GridPosition), With<ActivePiece>>,
     mut query_block: Query<&mut Transform, With<ActivePiece>>,
     block_size: Res<BlockSize>,
     grid: Single<&Grid>,
 ) {
     if game_state.0 == State::Running && timer.0.tick(time.delta()).just_finished() {
-        single_piece.2.row += 1;
-        for mut transform in &mut query_block {
-            transform.translation.y -= block_size.0;
-        }
-        let mut lowest_row_offset = None;
-        for offset in single_piece.1.cur_offsets().offset_positions {
-            let block_row_offset = offset.2;
-            if lowest_row_offset.is_none() {
-                lowest_row_offset = Some(block_row_offset);
-            } else if let Some(lowest) = lowest_row_offset {
-                if block_row_offset > lowest {
+        for (entity, piece_rotation, mut grid_position) in &mut query_piece {
+            grid_position.row += 1;
+            for mut transform in &mut query_block {
+                transform.translation.y -= block_size.0;
+            }
+            let mut lowest_row_offset = None;
+            for offset in piece_rotation.cur_offsets().offset_positions {
+                let block_row_offset = offset.2;
+                if lowest_row_offset.is_none() {
                     lowest_row_offset = Some(block_row_offset);
+                } else if let Some(lowest) = lowest_row_offset {
+                    if block_row_offset > lowest {
+                        lowest_row_offset = Some(block_row_offset);
+                    }
                 }
             }
-        }
-        if let Some(lowest_row_offset) = lowest_row_offset {
-            // check if the bottom block is touching the bottom of the board
-            let piece_row = single_piece.2.row + lowest_row_offset as u32;
-            if piece_row >= grid.rows {
-                warn!("Removed active piece!");
-                commands.entity(single_piece.0).remove::<ActivePiece>();
+            if let Some(lowest_row_offset) = lowest_row_offset {
+                // check if the bottom block is touching the bottom of the board
+                let piece_row = grid_position.row + lowest_row_offset as u32;
+                if piece_row >= grid.rows {
+                    warn!("Removed active piece!");
+                    commands.entity(entity).remove::<ActivePiece>();
+                }
             }
         }
     }
