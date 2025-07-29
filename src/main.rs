@@ -167,23 +167,28 @@ fn spawn_t(mut commands: Commands, initial_grid_position: Res<InitialGridPositio
     ));
 }
 
+fn block_transform(
+    block_offset: &OffsetPosition,
+    grid_canvas_position: &Position,
+    grid_position: &GridPosition,
+    block_size: &BlockSize,
+) -> Transform {
+    let x = grid_canvas_position.x
+        + ((grid_position.col as i32 + block_offset.0) as f32 * block_size.0);
+    let y = grid_canvas_position.y
+        - ((grid_position.row as i32 + block_offset.1) as f32 * block_size.0)
+        - block_size.0; // minus block_size because it draws the rectangle upwards
+    Transform::from_xyz(x, y, 0f32)
+}
+
 fn render_active_piece(
     mut commands: Commands,
     block_size: Res<BlockSize>,
     query_pieces: Query<(&StandardPieceRotations, &GridPosition, &Fill), With<ActivePiece>>,
     grid_canvas_position: Single<&Position, With<Grid>>,
 ) {
-    let initial_x = grid_canvas_position.x;
-    let initial_y = grid_canvas_position.y;
-
     for (rotations, piece_grid_position, color) in &query_pieces {
         for block_offset in rotations.cur_offsets().offset_positions.as_ref() {
-            let x = initial_x
-                + ((piece_grid_position.col as i32 + block_offset.0) as f32 * block_size.0);
-            let y = initial_y
-                - ((piece_grid_position.row as i32 + block_offset.1) as f32 * block_size.0)
-                - block_size.0; // minus block_size because it draws the rectangle upwards
-
             let shape = shapes::Rectangle {
                 extents: Vec2::new(block_size.0, block_size.0),
                 origin: RectangleOrigin::Center,
@@ -192,7 +197,12 @@ fn render_active_piece(
 
             let outline = ShapeBundle {
                 path: GeometryBuilder::build_as(&shape),
-                transform: Transform::from_xyz(x, y, 0f32),
+                transform: block_transform(
+                    &block_offset,
+                    &grid_canvas_position,
+                    &piece_grid_position,
+                    &block_size,
+                ),
                 ..default()
             };
 
@@ -217,19 +227,16 @@ fn rotate_piece(
     if keyboard.just_pressed(KeyCode::Space) {
         single_piece.0.rotate();
         let cur_offsets = single_piece.0.cur_offsets();
-
-        let initial_x = grid_canvas_position.x;
-        let initial_y = grid_canvas_position.y;
-
         let grid_position = &single_piece.1;
 
         for (mut transform, idx) in &mut query_block {
             let block_offset = cur_offsets.offset_positions[idx.0];
-            let x = initial_x + ((grid_position.col as i32 + block_offset.0) as f32 * block_size.0);
-            let y = initial_y
-                - ((grid_position.row as i32 + block_offset.1) as f32 * block_size.0)
-                - block_size.0; // minus block_size because it draws the rectangle upwards
-            *transform = Transform::from_xyz(x, y, 0f32);
+            *transform = block_transform(
+                &block_offset,
+                &grid_canvas_position,
+                &grid_position,
+                &block_size,
+            );
         }
     }
 }
