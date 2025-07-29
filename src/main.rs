@@ -116,7 +116,7 @@ fn spawn_grid(mut commands: Commands, block_size: Res<BlockSize>, window: Single
     let x = (window.width() / 2f32) - (grid_width / 2f32);
     let margin_y = -block_size;
 
-    commands.spawn((grid, Position { x, y: margin_y }, Stroke::color(BLACK)));
+    commands.spawn((grid, Position { x, y: margin_y }, Stroke::color(WHITE)));
 }
 
 fn render_grid(
@@ -153,7 +153,7 @@ fn spawn_t(mut commands: Commands, initial_grid_position: Res<InitialGridPositio
             col: initial_grid_position.0,
             row: initial_grid_position.1,
         },
-        Fill::color(BLACK),
+        Fill::color(RED),
         ActivePiece,
     ));
 }
