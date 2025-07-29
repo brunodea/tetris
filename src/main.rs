@@ -228,8 +228,7 @@ fn block_transform(
     let x = grid_canvas_position.x
         + ((grid_position.col as i32 + block_offset.0) as f32 * block_size.0);
     let y = grid_canvas_position.y
-        - ((grid_position.row as i32 + block_offset.1) as f32 * block_size.0)
-        - block_size.0; // minus block_size because it draws the rectangle upwards
+        - ((grid_position.row as i32 + block_offset.1) as f32 * block_size.0);
     Transform::from_xyz(x, y, 0f32)
 }
 
@@ -327,7 +326,7 @@ fn apply_gravity(
             }
             let mut lowest_row_offset = None;
             for offset in piece_rotation.cur_offsets().offset_positions {
-                let block_row_offset = offset.2;
+                let block_row_offset = offset.1;
                 if lowest_row_offset.is_none() {
                     lowest_row_offset = Some(block_row_offset);
                 } else if let Some(lowest) = lowest_row_offset {
@@ -339,7 +338,7 @@ fn apply_gravity(
             if let Some(lowest_row_offset) = lowest_row_offset {
                 // check if the bottom block is touching the bottom of the board
                 let piece_row = grid_position.row + lowest_row_offset as u32;
-                if piece_row >= grid.rows {
+                if piece_row >= grid.rows - 1 {
                     warn!("Removed active piece!");
                     commands.entity(entity).remove::<ActivePiece>();
                 }
