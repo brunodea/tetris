@@ -25,50 +25,56 @@ struct Grid {
     rows: u32,
 }
 
-#[derive(Debug)]
-struct OffsetPosition(i32, i32);
-impl From<(i32, i32)> for OffsetPosition {
-    fn from((col, row): (i32, i32)) -> Self {
-        OffsetPosition(col, row)
+#[derive(Debug, Copy, Clone)]
+struct OffsetPosition(i32, i32, usize);
+impl From<(i32, i32, usize)> for OffsetPosition {
+    fn from((col, row, idx): (i32, i32, usize)) -> Self {
+        OffsetPosition(col, row, idx)
     }
 }
 
-struct PieceOffsets<const NumOfBlocks: usize> {
-    offset_positions: [OffsetPosition; NumOfBlocks],
+struct PieceOffsets<const NUM_OF_BLOCKS: usize> {
+    offset_positions: [OffsetPosition; NUM_OF_BLOCKS],
 }
 
-impl<const NumOfBlocks: usize> PieceOffsets<NumOfBlocks> {
-    pub fn new(positions: [(i32, i32); NumOfBlocks]) -> Self {
-        PieceOffsets {
-            offset_positions: positions.map(OffsetPosition::from),
+impl<const NUM_OF_BLOCKS: usize> PieceOffsets<NUM_OF_BLOCKS> {
+    pub fn new(positions: [(i32, i32); NUM_OF_BLOCKS]) -> Self {
+        let mut offset_positions = [OffsetPosition(0i32, 0i32, 0usize); NUM_OF_BLOCKS];
+        for (idx, (x, y)) in positions.iter().enumerate() {
+            offset_positions[idx] = OffsetPosition(*x, *y, idx);
         }
+        PieceOffsets { offset_positions }
     }
 }
 
 #[derive(Component)]
-struct PieceRotations<const NumOfBlocks: usize, const NumOfRotations: usize> {
-    rotations_offsets: [PieceOffsets<NumOfBlocks>; NumOfRotations],
+struct PieceRotations<const NUM_OF_BLOCKS: usize, const NUM_OF_ROTATIONS: usize> {
+    rotations_offsets: [PieceOffsets<NUM_OF_BLOCKS>; NUM_OF_ROTATIONS],
     current: usize,
 }
 
-impl<const NumOfBlocks: usize, const NumOfRotations: usize>
-    PieceRotations<NumOfBlocks, NumOfRotations>
+impl<const NUM_OF_BLOCKS: usize, const NUM_OF_ROTATIONS: usize>
+    PieceRotations<NUM_OF_BLOCKS, NUM_OF_ROTATIONS>
 {
-    pub fn new(rotations_offsets: [PieceOffsets<NumOfBlocks>; NumOfRotations]) -> Self {
+    pub fn new(rotations_offsets: [PieceOffsets<NUM_OF_BLOCKS>; NUM_OF_ROTATIONS]) -> Self {
         Self {
             rotations_offsets,
             current: 0usize,
         }
     }
 
-    pub fn cur_offsets(&self) -> &PieceOffsets<NumOfBlocks> {
+    pub fn cur_offsets(&self) -> &PieceOffsets<NUM_OF_BLOCKS> {
         self.rotations_offsets
             .get(self.current)
             .expect("invalid value for current rotations offsets")
     }
 
     pub fn rotate(&mut self) {
-        self.current = (self.current + 1) % NumOfRotations;
+        self.current = (self.current + 1) % NUM_OF_ROTATIONS;
+    }
+
+    pub fn rotation(&self) -> usize {
+        self.current
     }
 }
 
@@ -101,6 +107,9 @@ impl Shape {
 
 #[derive(Component)]
 struct ActivePiece;
+
+#[derive(Component)]
+struct BlockIdx(usize);
 
 fn setup(mut commands: Commands, window: Single<&Window>) {
     commands.spawn((
@@ -158,22 +167,6 @@ fn spawn_t(mut commands: Commands, initial_grid_position: Res<InitialGridPositio
     ));
 }
 
-fn render_block(commands: &mut Commands, block_size: &BlockSize, position: Position, fill: &Fill) {
-    let shape = shapes::Rectangle {
-        extents: Vec2::new(block_size.0, block_size.0),
-        origin: RectangleOrigin::Center,
-        ..default()
-    };
-
-    let outline = ShapeBundle {
-        path: GeometryBuilder::build_as(&shape),
-        transform: Transform::from_xyz(position.x, position.y, 0f32),
-        ..default()
-    };
-
-    commands.spawn((outline, Fill::color(fill.color), Stroke::new(BLACK, 2.0)));
-}
-
 fn render_active_piece(
     mut commands: Commands,
     block_size: Res<BlockSize>,
@@ -190,7 +183,53 @@ fn render_active_piece(
             let y = initial_y
                 - ((piece_grid_position.row as i32 + block_offset.1) as f32 * block_size.0)
                 - block_size.0; // minus block_size because it draws the rectangle upwards
-            render_block(&mut commands, &block_size, Position { x, y }, color);
+
+            let shape = shapes::Rectangle {
+                extents: Vec2::new(block_size.0, block_size.0),
+                origin: RectangleOrigin::Center,
+                ..default()
+            };
+
+            let outline = ShapeBundle {
+                path: GeometryBuilder::build_as(&shape),
+                transform: Transform::from_xyz(x, y, 0f32),
+                ..default()
+            };
+
+            commands.spawn((
+                outline,
+                Fill::color(color.color),
+                Stroke::new(BLACK, 2.0),
+                BlockIdx(block_offset.2),
+                ActivePiece,
+            ));
+        }
+    }
+}
+
+fn rotate_piece(
+    mut single_piece: Single<(&mut StandardPieceRotations, &GridPosition), With<ActivePiece>>,
+    mut query_block: Query<(&mut Transform, &BlockIdx), With<ActivePiece>>,
+    grid_canvas_position: Single<&Position, With<Grid>>,
+    block_size: Res<BlockSize>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+) {
+    if keyboard.just_pressed(KeyCode::Space) {
+        single_piece.0.rotate();
+        let cur_offsets = single_piece.0.cur_offsets();
+
+        let initial_x = grid_canvas_position.x;
+        let initial_y = grid_canvas_position.y;
+
+        let grid_position = &single_piece.1;
+
+        for (mut transform, idx) in &mut query_block {
+            let block_offset = cur_offsets.offset_positions[idx.0];
+            let x = initial_x + ((grid_position.col as i32 + block_offset.0) as f32 * block_size.0);
+            let y = initial_y
+                - ((grid_position.row as i32 + block_offset.1) as f32 * block_size.0)
+                - block_size.0; // minus block_size because it draws the rectangle upwards
+            *transform = Transform::from_xyz(x, y, 0f32);
         }
     }
 }
@@ -208,5 +247,6 @@ fn main() {
                 (spawn_t, render_active_piece).chain(),
             ),
         )
+        .add_systems(Update, rotate_piece)
         .run();
 }
