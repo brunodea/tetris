@@ -91,7 +91,7 @@ pub struct ShapeData<const NUM_OF_BLOCKS: usize, const NUM_OF_DISPOSITIONS: usiz
 impl<const NUM_OF_BLOCKS: usize, const NUM_OF_DISPOSITIONS: usize>
     ShapeData<NUM_OF_BLOCKS, NUM_OF_DISPOSITIONS>
 {
-    pub fn num_dispositions(&mut self) -> usize {
+    pub fn num_dispositions(&self) -> usize {
         NUM_OF_DISPOSITIONS
     }
 }
@@ -99,13 +99,13 @@ impl<const NUM_OF_BLOCKS: usize, const NUM_OF_DISPOSITIONS: usize>
 pub type StandardShapeData = ShapeData<STANDARD_NUM_OF_BLOCKS, 4>;
 
 /// Which list of offsets is currently "enabled".
-#[derive(Component)]
-pub struct CurrentDisposition(usize);
+#[derive(Debug, Component)]
+pub struct CurrentDisposition(pub usize);
 
 // TODO: some SecretPieceBundle could be a bundle of a piece that
 // holds some coins or power or something that's released after the piece is destroyed.
 #[derive(Bundle)]
-struct PieceBundle<const NUM_OF_BLOCKS: usize> {
+pub struct PieceBundle<const NUM_OF_BLOCKS: usize> {
     blocks: NBlockOffsets<NUM_OF_BLOCKS>,
     current_disposition: CurrentDisposition,
 }
@@ -119,7 +119,8 @@ fn render_active_piece(
     query_pieces: Query<(&StandardNBlockOffsets, &grid::GridPosition, &Fill), With<ActivePiece>>,
     grid: Single<&grid::Grid>,
 ) {
-    for (dispositions, piece_grid_position, fill_color) in &query_pieces {
+    if let Ok((&dispositions, &piece_grid_position, &fill_color)) = query_pieces.get_single() {
+        info!("Found piece to render");
         for block_offset in dispositions.0 {
             let shape = shapes::Rectangle {
                 extents: Vec2::new(block_size.0, block_size.0),
@@ -142,31 +143,13 @@ fn render_active_piece(
                 outline,
                 Fill::color(fill_color.color),
                 Stroke::new(BLACK, 1.0),
+                block::BlockIdx(block_offset.idx),
+                block::ActiveBlock,
                 ActivePiece,
             ));
         }
-    }
-}
-
-// FIXME: move this to `util`?
-pub fn rotate_standard_piece(
-    dispositions: &StandardDispositions,
-    current_disposition: &mut CurrentDisposition,
-    grid_position: &grid::GridPosition,
-    transform: &mut Transform,
-    grid_canvas_position: &Transform,
-    block_size: block::BlockSize,
-) {
-    *current_disposition = CurrentDisposition(current_disposition.0 + 1);
-
-    // `dispositions.get()`circles between the dispositions.
-    for block_offset in dispositions.get(current_disposition.0).0.iter() {
-        *transform = util::block_transform(
-            block_offset,
-            grid_canvas_position,
-            grid_position,
-            &block_size,
-        );
+    } else {
+        info!("No active piece to render.");
     }
 }
 

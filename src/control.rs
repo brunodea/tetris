@@ -1,6 +1,10 @@
 use bevy::prelude::*;
 
-use crate::{block, game, grid, piece};
+use crate::{
+    block, game, grid,
+    piece::{self, CurrentDisposition},
+    util,
+};
 
 pub struct ControlPlugin;
 
@@ -16,24 +20,30 @@ fn rotate_shape_t_piece(
         (&mut piece::CurrentDisposition, &grid::GridPosition),
         With<piece::model::ShapeT>,
     >,
-    mut query_block: Query<&mut Transform, With<piece::ActivePiece>>,
+    mut query_block: Query<(&mut Transform, &block::BlockIdx), With<block::ActiveBlock>>,
     grid: Single<&grid::Grid>,
     block_size: Res<block::BlockSize>,
     shape_t_data: Res<piece::model::ShapeTData>,
     keyboard: Res<ButtonInput<KeyCode>>,
 ) {
     if keyboard.just_pressed(KeyCode::Space) {
-        for (mut current_disposition, grid_position) in query_piece.iter_mut() {
-            for mut transform in query_block.iter_mut() {
-                piece::rotate_standard_piece(
-                    &shape_t_data.0.dispositions,
-                    &mut current_disposition,
-                    &grid_position,
-                    &mut transform,
+        if let Ok((mut current_disposition, piece_grid_position)) = query_piece.get_single_mut() {
+            info!("Found piece to rotate.");
+            *current_disposition = CurrentDisposition(
+                (current_disposition.0 + 1usize) % shape_t_data.0.num_dispositions(),
+            );
+            let new_disposition = shape_t_data.0.dispositions.get(current_disposition.0);
+            for (mut transform, idx) in query_block.iter_mut() {
+                let block_offset = &new_disposition.0[idx.0];
+                *transform = util::block_transform(
+                    block_offset,
                     &grid.position,
-                    *block_size,
+                    piece_grid_position,
+                    &block_size,
                 );
             }
+        } else {
+            info!("No piece available for rotation.");
         }
     }
 }

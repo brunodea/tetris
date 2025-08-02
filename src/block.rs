@@ -11,6 +11,12 @@ impl Plugin for BlockPlugin {
 #[derive(Resource, Copy, Clone)]
 pub struct BlockSize(pub f32);
 
+#[derive(Component)]
+pub struct ActiveBlock;
+
+#[derive(Component, Debug)]
+pub struct BlockIdx(pub usize);
+
 /// Block offset relative to the center of a piece.
 #[derive(Component, Debug, Copy, Clone)]
 pub struct SingleBlockOffset {
@@ -31,7 +37,7 @@ impl From<(i32, i32, usize)> for SingleBlockOffset {
 }
 
 /// N Block offsets represent the current disposition of a piece.
-#[derive(Component, Copy, Clone)]
+#[derive(Component, Debug, Copy, Clone)]
 pub struct NBlockOffsets<const NUM_OF_BLOCKS: usize>(pub [SingleBlockOffset; NUM_OF_BLOCKS]);
 
 impl<const NUM_OF_BLOCKS: usize> From<[(i32, i32); NUM_OF_BLOCKS]>
